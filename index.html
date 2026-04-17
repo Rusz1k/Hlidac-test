@@ -167,11 +167,10 @@ header {
 .sstatus { width:42px; text-align:right; font-family:var(--mono); font-size:11px; flex-shrink:0; margin-left:3px; }
 
 /* BOTTOM NAV */
-.bnav {
-  position:fixed; bottom:0; left:0; right:0;
-  background:var(--surface); border-top:1px solid var(--border);
-  display:flex; z-index:9999;
-}
+
+.bnav { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+.stops-wrap { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+html { height: 100vh; }
 .nbtn {
   flex:1; padding:10px 4px 8px; text-align:center;
   background:none; border:none; color:var(--muted);
