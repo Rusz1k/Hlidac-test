@@ -377,6 +377,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
 <div class="screen" id="screenEditor">
   <div class="tabs" id="editorTabs">
     <div class="tab active" onclick="edTab('spoje')">Spoje</div>
+    <div class="tab" onclick="edTab('zastavky')">Zastávky</div>
     <div class="tab" onclick="edTab('turnus')">Turnus</div>
     <div class="tab" onclick="edTab('alarmy')">Budíky</div>
     <div class="tab" onclick="edTab('sdileni')">Sdílení</div>
@@ -486,7 +487,7 @@ const STOP_COORDS = {
   "Třinec,aut.st.":                   {lat:49.6804886,lng:18.6667900},
   "Třinec,aut.st.pod Kanadou":        {lat:49.6835481,lng:18.6527806},
   "Třinec,žel.válcovna C-D":          {lat:49.6980744,lng:18.6316892},
- "Třinec,magistrát":                  {lat: 49.676200, lng: 18.674300},
+  "Třinec,magistrát":                 {lat:49.676200, lng:18.674300},
   "Třinec,Lyžbice,rest.Zobawa":       {lat:49.6605225,lng:18.6899261},
   "Vendryně,u žel.st.":               {lat:49.6572875,lng:18.6967411},
   "Vendryně,u kříže":                 {lat:49.6595306,lng:18.6984311},
@@ -637,7 +638,7 @@ const TURNUS_DEFAULT = {
 let C = {
   gpsRadius:50, earlyLimit:30, lateLimit:90, preDep:2,
   gpsOn:true, vibOn:true, soundOn:true, shareOn:true,
-  spoje:[], turnusy:[], alarmy:[],
+  spoje:[], turnusy:[], alarmy:[], zastavky:[],
   activeTurnus:null, activeSpoj:null,
   driverName:'Řidič', fbUrl:'https://bushuard-default-rtdb.europe-west1.firebasedatabase.app', driverId: 'drv_'+Math.random().toString(36).slice(2,8),
 };
@@ -1126,12 +1127,14 @@ function exportLog(){
 // ─── EDITOR ───────────────────────────────────────────────────────
 function edTab(tab){
   R.editorTab=tab;
-  document.querySelectorAll('#editorTabs .tab').forEach((t,i)=>t.classList.toggle('active',['spoje','turnus','alarmy','sdileni'][i]===tab));
+  const order=['spoje','zastavky','turnus','alarmy','sdileni'];
+  document.querySelectorAll('#editorTabs .tab').forEach((t,i)=>t.classList.toggle('active',order[i]===tab));
   renderEditorTab(tab);
 }
 function renderEditorTab(tab){
   const el=$('editorContent');
   if(tab==='spoje')el.innerHTML=renderSpoje();
+  else if(tab==='zastavky')el.innerHTML=renderZastavky();
   else if(tab==='turnus')el.innerHTML=renderTurnus();
   else if(tab==='alarmy')el.innerHTML=renderAlarmy();
   else el.innerHTML=renderSdileni();
@@ -1176,7 +1179,101 @@ function renderSdileni(){
   </div>`;
 }
 
-// ─── SPOJ EDITOR ──────────────────────────────────────────────────
+// ─── ZASTÁVKY ─────────────────────────────────────────────────────
+// Uživatelské zastávky jsou uloženy v C.zastavky[]
+// Vestavěné z STOP_COORDS jsou vždy dostupné jako základ
+
+function allZastavky(){
+  // Sloučí vestavěné + uživatelské, uživatelské mají přednost
+  const base=Object.entries(STOP_COORDS).map(([n,c])=>({n,lat:c.lat,lng:c.lng,builtin:true}));
+  const user=C.zastavky||[];
+  const userNames=new Set(user.map(z=>z.n));
+  return [...user,...base.filter(z=>!userNames.has(z.n))];
+}
+
+function renderZastavky(){
+  const all=allZastavky();
+  const user=C.zastavky||[];
+  const items=all.map(z=>`
+    <div class="list-item" style="cursor:default">
+      <div class="li-icon">${z.builtin?'🚏':'📍'}</div>
+      <div class="li-main">
+        <div class="li-title">${z.n}</div>
+        <div class="li-sub" style="font-family:var(--mono);font-size:10px">${z.lat.toFixed(6)}, ${z.lng.toFixed(6)}${z.builtin?' · vestavěná':''}</div>
+      </div>
+      <div class="li-actions">
+        ${!z.builtin?`<button class="li-act ed" onclick="editZastavka('${z.n.replace(/'/g,"\\'")}')">✏️</button><button class="li-act dl" onclick="deleteZastavka('${z.n.replace(/'/g,"\\'")}')">🗑️</button>`:'<span style="font-size:10px;color:var(--text2);font-family:var(--mono)">sys</span>'}
+      </div>
+    </div>`).join('');
+  return `<div style="padding:10px">
+    <button class="btn btn-primary btn-full" onclick="openZastavkaEditor(null)" style="margin-bottom:6px">➕ Nová zastávka</button>
+    <div style="font-family:var(--mono);font-size:11px;color:var(--text2);margin-bottom:8px;padding:6px 8px;background:var(--card);border-radius:6px">
+      💡 Zastávky se pak vybírají při tvorbě spoje – stačí kliknout a dopsat čas.
+    </div>
+    ${items}
+  </div>`;
+}
+
+function openZastavkaEditor(existing){
+  const isNew=!existing;
+  $('modalContent').innerHTML=`
+    <div class="modal-title">${isNew?'➕ Nová zastávka':'✏️ Upravit zastávku'}
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <label class="form-label">Název zastávky</label>
+    <input class="form-input" id="zName" placeholder="např. Třinec,náměstí" value="${existing?.n||''}">
+    <label class="form-label">GPS souřadnice</label>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <input class="form-input" id="zLat" placeholder="Lat (49.xxx)" style="margin:0;flex:1" value="${existing?.lat||''}">
+      <input class="form-input" id="zLng" placeholder="Lng (18.xxx)" style="margin:0;flex:1" value="${existing?.lng||''}">
+    </div>
+    <button class="btn btn-secondary btn-full" onclick="useMyLocationForStop()" style="margin-bottom:10px">
+      📍 Použít moji aktuální GPS polohu
+    </button>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveZastavka(${isNew},'${existing?.n||''}')">💾 Uložit</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Zrušit</button>
+    </div>`;
+  openModal();
+}
+
+function useMyLocationForStop(){
+  if(!R.gpsPos){toast('GPS nedostupná');return;}
+  $('zLat').value=R.gpsPos.lat.toFixed(6);
+  $('zLng').value=R.gpsPos.lng.toFixed(6);
+  toast('Poloha načtena ✓');
+}
+
+function saveZastavka(isNew, oldName){
+  const n=$('zName').value.trim();
+  const lat=parseFloat($('zLat').value);
+  const lng=parseFloat($('zLng').value);
+  if(!n){toast('Zadej název');return;}
+  if(isNaN(lat)||isNaN(lng)){toast('Zadej platné souřadnice');return;}
+  if(!C.zastavky)C.zastavky=[];
+  if(isNew){
+    if(C.zastavky.find(z=>z.n===n)||STOP_COORDS[n]){toast('Zastávka s tímto názvem již existuje');return;}
+    C.zastavky.push({n,lat,lng});
+  } else {
+    const idx=C.zastavky.findIndex(z=>z.n===oldName);
+    if(idx>=0)C.zastavky[idx]={n,lat,lng};
+    else C.zastavky.push({n,lat,lng});
+  }
+  save();closeModal();renderEditorTab('zastavky');toast(isNew?'Zastávka přidána':'Uloženo');
+}
+
+function editZastavka(name){
+  const z=(C.zastavky||[]).find(x=>x.n===name);
+  if(z)openZastavkaEditor(z);
+}
+
+function deleteZastavka(name){
+  if(!confirm('Smazat zastávku?'))return;
+  C.zastavky=(C.zastavky||[]).filter(z=>z.n!==name);
+  save();renderEditorTab('zastavky');toast('Smazáno');
+}
+
+// ─── SPOJ EDITOR (s výběrem ze zastávek) ─────────────────────────
 function editSpoj(id){openSpojEditor(C.spoje.find(s=>s.id===id));}
 function deleteSpoj(id){if(!confirm('Smazat?'))return;C.spoje=C.spoje.filter(s=>s.id!==id);C.turnusy.forEach(t=>{t.spojIds=t.spojIds.filter(x=>x!==id);});save();renderEditorTab('spoje');toast('Smazáno');}
 function openSpojEditor(spoj){
@@ -1194,7 +1291,18 @@ function openSpojEditor(spoj){
 }
 function renderStopRows(){
   const el=$('stopRows');if(!el)return;
-  el.innerHTML=R.draftStops.map((z,i)=>`<div class="stop-editor-row"><span class="sn">${i+1}</span><input class="se-name" placeholder="Název zastávky" value="${z.n||''}" onchange="R.draftStops[${i}].n=this.value"><input class="se-time" type="time" value="${z.t||''}" onchange="R.draftStops[${i}].t=this.value"><button class="se-del" onclick="removeStopRow(${i})">✕</button></div>`).join('');
+  const all=allZastavky();
+  const opts=all.map(z=>`<option value="${z.n}">${z.n}</option>`).join('');
+  el.innerHTML=R.draftStops.map((z,i)=>`
+    <div class="stop-editor-row">
+      <span class="sn">${i+1}</span>
+      <select class="se-name" onchange="R.draftStops[${i}].n=this.value" style="flex:1;background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 7px;font-family:var(--mono);font-size:12px;outline:none;">
+        <option value="">-- Vyber zastávku --</option>
+        ${all.map(s=>`<option value="${s.n}"${z.n===s.n?' selected':''}>${s.n}</option>`).join('')}
+      </select>
+      <input class="se-time" type="time" value="${z.t||''}" onchange="R.draftStops[${i}].t=this.value">
+      <button class="se-del" onclick="removeStopRow(${i})">✕</button>
+    </div>`).join('');
 }
 function addStopRow(){R.draftStops.push({n:'',t:R.draftStops.slice(-1)[0]?.t||''});renderStopRows();}
 function removeStopRow(i){if(R.draftStops.length<=1)return;R.draftStops.splice(i,1);renderStopRows();}
