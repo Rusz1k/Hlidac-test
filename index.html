@@ -28,12 +28,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--u
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
 
 /* ── LAYOUT ── */
-#app{display:flex;flex-direction:column;height:100vh;}
+#app{display:flex;flex-direction:column;height:100vh;position:relative;}
 .screen{flex:1;overflow-y:auto;overflow-x:hidden;padding-bottom:64px;display:none;}
 .screen.active{display:block;}
-#screenMap{display:none;padding-bottom:0;height:calc(100vh - 48px - 34px - 60px);/* minus header, statusbar, bnav */}
+#screenMap{display:none;padding-bottom:0;position:absolute;left:0;right:0;}
 #screenMap.active{display:flex;flex-direction:column;}
-
 
 /* ── HEADER ── */
 .hdr{
@@ -703,7 +702,19 @@ function showScreen(name){
     $('screen'+s).classList.toggle('active',s===name);
     const b=$('nav'+s);if(b)b.classList.toggle('active',s===name);
   });
-  if(name==='Map'){initMap();refreshMapStops();refreshColleagues();setTimeout(()=>R.map?.invalidateSize(),100);}
+  if(name==='Map'){
+    // Dynamicky nastav výšku mapy přesně mezi header+statusbar a spodní lištou
+    const hdr=document.querySelector('.hdr');
+    const sb=document.querySelector('.statusbar');
+    const bnav=document.querySelector('.bnav');
+    const top=(hdr?.offsetHeight||48)+(sb?.offsetHeight||34);
+    const bottom=bnav?.offsetHeight||60;
+    const ms=document.getElementById('screenMap');
+    ms.style.top=top+'px';
+    ms.style.height=(window.innerHeight-top-bottom)+'px';
+    initMap();refreshMapStops();refreshColleagues();
+    setTimeout(()=>R.map?.invalidateSize(),150);
+  }
   if(name==='Editor')renderEditorTab(R.editorTab);
   if(name==='Log')renderLog();
 }
