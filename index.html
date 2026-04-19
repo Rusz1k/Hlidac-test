@@ -31,8 +31,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--u
 #app{display:flex;flex-direction:column;height:100vh;}
 .screen{flex:1;overflow-y:auto;overflow-x:hidden;padding-bottom:64px;display:none;}
 .screen.active{display:block;}
-#screenMap{display:none;padding-bottom:0;}
+#screenMap{display:none;padding-bottom:0;height:calc(100vh - 48px - 34px - 60px);/* minus header, statusbar, bnav */}
 #screenMap.active{display:flex;flex-direction:column;}
+
 
 /* ── HEADER ── */
 .hdr{
@@ -120,7 +121,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--u
 .sstatus{width:44px;text-align:right;font-family:var(--mono);font-size:11px;flex-shrink:0;margin-left:3px;}
 
 /* ── MAP SCREEN ── */
-#mapContainer{flex:1;position:relative;}
+#mapContainer{flex:1;position:relative;min-height:0;}
 #leafletMap{width:100%;height:100%;}
 .map-controls{
   position:absolute;top:10px;right:10px;z-index:1000;
@@ -145,7 +146,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--u
 /* Event overlay on map */
 .map-event-bar{
   background:var(--surf);border-top:1px solid var(--border);
-  padding:8px 10px;flex-shrink:0;
+  padding:8px 10px;flex-shrink:0;height:52px;
   display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;
 }
 .map-event-bar::-webkit-scrollbar{display:none;}
@@ -165,7 +166,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--u
 /* Colleague list */
 .colleague-bar{
   background:var(--surf);border-bottom:1px solid var(--border);
-  padding:6px 10px;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;flex-shrink:0;
+  padding:6px 10px;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;flex-shrink:0;height:36px;align-items:center;
 }
 .colleague-bar::-webkit-scrollbar{display:none;}
 .coll-chip{
@@ -486,7 +487,7 @@ const STOP_COORDS = {
   "Třinec,aut.st.":                   {lat:49.6804886,lng:18.6667900},
   "Třinec,aut.st.pod Kanadou":        {lat:49.6835481,lng:18.6527806},
   "Třinec,žel.válcovna C-D":          {lat:49.6980744,lng:18.6316892},
-"Třinec,magistrát": {lat: 49.676200, lng: 18.674300},
+  "Třinec,magistrát":                 {lat:49.677719, lng:18.672759},
   "Třinec,Lyžbice,rest.Zobawa":       {lat:49.6605225,lng:18.6899261},
   "Vendryně,u žel.st.":               {lat:49.6572875,lng:18.6967411},
   "Vendryně,u kříže":                 {lat:49.6595306,lng:18.6984311},
@@ -639,7 +640,7 @@ let C = {
   gpsOn:true, vibOn:true, soundOn:true, shareOn:true,
   spoje:[], turnusy:[], alarmy:[],
   activeTurnus:null, activeSpoj:null,
-  driverName:'Řidič', fbUrl:'', driverId: 'drv_'+Math.random().toString(36).slice(2,8),
+  driverName:'Řidič', fbUrl:'https://bushuard-default-rtdb.europe-west1.firebasedatabase.app', driverId: 'drv_'+Math.random().toString(36).slice(2,8),
 };
 let R = {
   curStopIdx:0, gpsPos:null, gpsSpeed:0, gpsAcc:999,
@@ -702,7 +703,7 @@ function showScreen(name){
     $('screen'+s).classList.toggle('active',s===name);
     const b=$('nav'+s);if(b)b.classList.toggle('active',s===name);
   });
-  if(name==='Map'){initMap();refreshMapStops();refreshColleagues();}
+  if(name==='Map'){initMap();refreshMapStops();refreshColleagues();setTimeout(()=>R.map?.invalidateSize(),100);}
   if(name==='Editor')renderEditorTab(R.editorTab);
   if(name==='Log')renderLog();
 }
@@ -763,8 +764,8 @@ function checkProximity(){
 // ─── MAP ──────────────────────────────────────────────────────────
 let mapTileLayer=null;
 const MAP_TILES=[
-  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-  'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',
+  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
 ];
 let mapTileIdx=0;
 
@@ -773,7 +774,7 @@ function initMap(){
   R.mapInited=true;
   R.map=L.map('leafletMap',{zoomControl:false}).setView([49.67,18.72],13);
   L.control.zoom({position:'bottomright'}).addTo(R.map);
-  mapTileLayer=L.tileLayer(MAP_TILES[0],{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(R.map);
+  mapTileLayer=L.tileLayer(MAP_TILES[0],{maxZoom:19,subdomains:'abcd',attribution:'© CartoDB © OpenStreetMap'}).addTo(R.map);
   // Place all stop markers
   Object.entries(STOP_COORDS).forEach(([name,c])=>{
     const mk=L.circleMarker([c.lat,c.lng],{
@@ -787,7 +788,7 @@ function initMap(){
 function toggleMapStyle(){
   mapTileIdx=(mapTileIdx+1)%MAP_TILES.length;
   mapTileLayer.setUrl(MAP_TILES[mapTileIdx]);
-  toast(mapTileIdx===1?'Tmavá mapa':'Standardní mapa');
+  toast(mapTileIdx===1?'Tmavá mapa':'Světlá mapa');
 }
 
 function centerOnMe(){
